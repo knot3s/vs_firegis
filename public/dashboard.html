@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Command Dashboard — VAS FireGIS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; }
+    html, body, #app { height: 100%; }
+    #map { height: 100%; width: 100%; }
+    .leaflet-container { background: #0c0a09; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb { background: #44403c; border-radius: 8px; }
+  </style>
+</head>
+<body class="bg-stone-950 text-stone-100">
+  <!-- Login gate -->
+  <div id="loginGate" class="fixed inset-0 z-50 flex items-center justify-center bg-stone-950 p-4">
+    <form id="loginForm" class="w-full max-w-sm rounded-2xl border border-amber-700/40 bg-stone-900 p-6 shadow-2xl">
+      <p class="text-xs font-semibold uppercase tracking-widest text-amber-400">Fire Personnel</p>
+      <h1 class="mt-2 text-xl font-extrabold">VAS Command Login</h1>
+      <p class="mt-1 text-xs text-stone-400">Municipality of Vincenzo A. Sagun BFP station staff.</p>
+      <label class="mt-4 block text-sm">Username
+        <input id="user" value="firestaff" class="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2" />
+      </label>
+      <label class="mt-3 block text-sm">Password
+        <input id="pass" type="password" value="vas-bfp-2026" class="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2" />
+      </label>
+      <p id="loginErr" class="mt-2 hidden text-xs text-rose-400"></p>
+      <button class="mt-4 w-full rounded-xl bg-amber-500 py-2.5 font-bold text-stone-950 hover:bg-amber-400">Enter dashboard</button>
+      <a href="/" class="mt-3 block text-center text-xs text-stone-500">← Public home</a>
+    </form>
+  </div>
+
+  <div id="app" class="hidden h-full grid-rows-[auto_1fr] lg:grid" style="grid-template-columns: 380px 1fr;">
+    <header class="col-span-2 flex flex-wrap items-center gap-3 border-b border-stone-800 bg-stone-900 px-4 py-2.5">
+      <div>
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-amber-400">Fire Station Command</p>
+        <h1 class="text-sm font-extrabold leading-tight sm:text-base">EMERGENCY RESPONSE IN FIRE (GIS)</h1>
+      </div>
+      <div class="ml-auto flex flex-wrap items-center gap-2 text-xs">
+        <span id="statLine" class="rounded-full bg-stone-800 px-3 py-1 text-stone-300">0 active</span>
+        <a href="/api/export/csv" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export CSV</a>
+        <a href="/api/export/pdf" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export PDF</a>
+        <span id="who" class="text-stone-400"></span>
+      </div>
+    </header>
+
+    <aside class="flex h-[45vh] flex-col border-b border-stone-800 bg-stone-900 lg:h-full lg:border-b-0 lg:border-r">
+      <div class="flex items-center justify-between px-4 py-3">
+        <h2 class="text-sm font-bold">Live alert feed</h2>
+        <span class="text-[10px] uppercase tracking-wider text-stone-500">Newest first</span>
+      </div>
+      <div id="feed" class="flex-1 space-y-2 overflow-y-auto px-3 pb-4"></div>
+    </aside>
+
+    <section class="relative min-h-[40vh]">
+      <div id="map"></div>
+      <div id="detail" class="pointer-events-none absolute bottom-4 left-4 right-4 hidden max-w-xl rounded-2xl border border-stone-700 bg-stone-900/95 p-4 shadow-2xl backdrop-blur lg:left-auto"></div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const LIFECYCLE = ["Pending", "Dispatched", "Under Control", "Fire Out", "False Alarm"];
+    let map, stationMarker, layerIncidents, layerBarangays;
+    let incidents = [];
+    let selectedId = null;
+    const markersById = {};
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = document.getElementById("loginErr");
+      err.classList.add("hidden");
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "fire_personnel",
+          username: document.getElementById("user").value,
+          password: document.getElementById("pass").value
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        err.textContent = data.error || "Login failed";
+        err.classList.remove("hidden");
+        return;
+      }
+      sessionStorage.setItem("vas_staff", JSON.stringify(data));
+      openApp(data);
+    });
+
+    const cached = sessionStorage.getItem("vas_staff");
+    if (cached) openApp(JSON.parse(cached));
+
+    function openApp(staff) {
+      document.getElementById("loginGate").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      document.getElementById("app").classList.add("grid");
+      document.getElementById("who").textContent = staff.name;
+      initMap();
+      loadAll();
+      poll();
+      listenSSE();
+    }
+
+    function initMap() {
+      if (map) { setTimeout(() => map.invalidateSize(), 80); return; }
+      map = L.map("map").setView([7.5333, 123.1667], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap"
+      }).addTo(map);
+
+      const stationIcon = L.divIcon({
+        className: "",
+        html: '<div style="background:#f59e0b;color:#1c1917;border-radius:999px;padding:6px 8px;font:700 11px Inter,sans-serif;box-shadow:0 0 0 4px rgba(245,158,11,.35);white-space:nowrap">🚒 Station</div>',
+        iconSize: [90, 28],
+        iconAnchor: [45, 14]
+      });
+      fetch("/api/station").then((r) => r.json()).then((s) => {
+        stationMarker = L.marker([s.lat, s.lng], { icon: stationIcon, zIndexOffset: 1000 })
+          .addTo(map)
+          .bindPopup(`<strong>${s.name}</strong><br>${s.address}`);
+      });
+
+      fetch("/api/barangays").then((r) => r.json()).then((fc) => {
+        layerBarangays = L.geoJSON(fc, {
+          style: (f) => ({
+            color: f.properties.is_poblacion ? "#fbbf24" : "#38bdf8",
+            weight: f.properties.is_poblacion ? 2 : 1,
+            fillColor: f.properties.is_poblacion ? "#fbbf24" : "#0ea5e9",
+            fillOpacity: 0.08
+          }),
+          onEachFeature: (f, layer) => {
+            layer.bindTooltip(f.properties.name, { sticky: true });
+          }
+        }).addTo(map);
+        map.fitBounds(layerBarangays.getBounds().pad(0.08));
+      });
+      setTimeout(() => map.invalidateSize(), 120);
+    }
+
+    function badge(spatial) {
+      const v = spatial === "Verified Spatial Alert";
+      return v
+        ? '<span class="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">Verified</span>'
+        : '<span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300">Discrepancy</span>';
+    }
+
+    function pinColor(inc) {
+      return inc.spatial_status === "Verified Spatial Alert" ? "#10b981" : "#eab308";
+    }
+
+    function incidentIcon(inc) {
+      const c = pinColor(inc);
+      return L.divIcon({
+        className: "",
+        html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c};border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 18]
+      });
+    }
+
+    function renderMarkers() {
+      Object.values(markersById).forEach((m) => map.removeLayer(m));
+      Object.keys(markersById).forEach((k) => delete markersById[k]);
+      incidents.forEach((inc) => {
+        if (!Number.isFinite(inc.pinned_lat)) return;
+        const m = L.marker([inc.pinned_lat, inc.pinned_lng], { icon: incidentIcon(inc) })
+          .addTo(map)
+          .on("click", () => selectIncident(inc.id));
+        markersById[inc.id] = m;
+      });
+    }
+
+    function renderFeed() {
+      const feed = document.getElementById("feed");
+      const active = incidents.filter((i) => !["Fire Out", "False Alarm"].includes(i.lifecycle_status));
+      document.getElementById("statLine").textContent =
+        `${active.length} active · ${incidents.length} total`;
+      if (!incidents.length) {
+        feed.innerHTML = '<p class="px-1 text-sm text-stone-500">No reports yet. Waiting for resident submissions…</p>';
+        return;
+      }
+      feed.innerHTML = incidents.map((inc) => `
+        <button data-id="${inc.id}" class="w-full rounded-xl border p-3 text-left transition ${selectedId === inc.id ? "border-amber-400 bg-stone-800" : "border-stone-800 bg-stone-950 hover:border-stone-600"}">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm font-bold">${inc.barangay_name}</p>
+            ${badge(inc.spatial_status)}
+          </div>
+          <p class="mt-1 text-xs text-stone-400">${inc.reporter_name} · ${inc.reporter_phone}</p>
+          <p class="mt-1 text-[11px] text-stone-500">${new Date(inc.created_at).toLocaleString()} · ${inc.lifecycle_status}</p>
+          <p class="mt-1 font-mono text-[10px] text-stone-600">${inc.discrepancy_meters == null ? "no GPS" : inc.discrepancy_meters + " m gap"}</p>
+        </button>
+      `).join("");
+      feed.querySelectorAll("button[data-id]").forEach((btn) => {
+        btn.addEventListener("click", () => selectIncident(btn.dataset.id));
+      });
+    }
+
+    function selectIncident(id) {
+      selectedId = id;
+      const inc = incidents.find((i) => i.id === id);
+      if (!inc) return;
+      renderFeed();
+      map.setView([inc.pinned_lat, inc.pinned_lng], 16);
+      const el = document.getElementById("detail");
+      el.classList.remove("hidden");
+      el.classList.add("pointer-events-auto");
+      el.innerHTML = `
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-xs text-stone-400">${inc.id}</p>
+            <h3 class="text-lg font-extrabold">Brgy. ${inc.barangay_name}</h3>
+          </div>
+          ${badge(inc.spatial_status)}
+        </div>
+        <p class="mt-2 text-xs text-stone-300">${inc.spatial_reason || inc.spatial_status}</p>
+        <dl class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div><dt class="text-stone-500">Reporter</dt><dd>${inc.reporter_name}</dd></div>
+          <div><dt class="text-stone-500">Phone</dt><dd>${inc.reporter_phone}</dd></div>
+          <div><dt class="text-stone-500">Device GPS</dt><dd class="font-mono">${inc.device_lat ?? "—"}, ${inc.device_lng ?? "—"}</dd></div>
+          <div><dt class="text-stone-500">Pinned</dt><dd class="font-mono">${Number(inc.pinned_lat).toFixed(5)}, ${Number(inc.pinned_lng).toFixed(5)}</dd></div>
+        </dl>
+        <p class="mt-2 text-sm">${inc.notes || "<span class='text-stone-500'>No notes</span>"}</p>
+        <p class="mt-3 text-[10px] font-semibold uppercase tracking-wider text-stone-500">Lifecycle</p>
+        <div class="mt-1 flex flex-wrap gap-1.5">
+          ${LIFECYCLE.map((s) => `
+            <button data-status="${s}" class="rounded-lg px-2.5 py-1 text-[11px] font-semibold ${inc.lifecycle_status === s ? "bg-amber-500 text-stone-950" : "bg-stone-800 text-stone-200 hover:bg-stone-700"}">${s}</button>
+          `).join("")}
+        </div>
+      `;
+      el.querySelectorAll("button[data-status]").forEach((btn) => {
+        btn.addEventListener("click", () => updateStatus(inc.id, btn.dataset.status));
+      });
+    }
+
+    async function updateStatus(id, lifecycle_status) {
+      const res = await fetch(`/api/incidents/${encodeURIComponent(id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lifecycle_status, updated_by: "fire_personnel" })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const idx = incidents.findIndex((i) => i.id === id);
+        if (idx >= 0) incidents[idx] = data.incident;
+        renderFeed();
+        renderMarkers();
+        selectIncident(id);
+      }
+    }
+
+    async function loadAll() {
+      const res = await fetch("/api/incidents");
+      const data = await res.json();
+      incidents = data.incidents || [];
+      renderFeed();
+      if (map) renderMarkers();
+    }
+
+    function poll() { setInterval(loadAll, 8000); }
+
+    function listenSSE() {
+      try {
+        const es = new EventSource("/api/stream");
+        es.addEventListener("incident", (ev) => {
+          const inc = JSON.parse(ev.data);
+          incidents = [inc, ...incidents.filter((i) => i.id !== inc.id)];
+          renderFeed();
+          renderMarkers();
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.frequency.value = 880;
+            o.connect(g); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.08, ctx.currentTime);
+            o.start(); o.stop(ctx.currentTime + 0.15);
+          } catch {}
+        });
+        es.addEventListener("status", () => loadAll());
+      } catch {}
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "vs-firegis",
+  "version": "1.0.0",
+  "description": "EMERGENCY RESPONSE IN FIRE (GIS) — Municipality of Vincenzo A. Sagun, Zamboanga del Sur",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "echo Build complete"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

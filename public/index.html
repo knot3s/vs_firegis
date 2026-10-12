@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAS FireGIS — Emergency Response</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { ember: { 500: "#e11d48", 700: "#be123c", 950: "#1c0a0e" } }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>body { font-family: Inter, system-ui, sans-serif; }</style>
+</head>
+<body class="min-h-screen bg-ember-950 text-stone-100">
+  <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(225,29,72,0.18),_transparent_55%)]"></div>
+  <main class="relative mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-4 py-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-rose-400">Municipality of Vincenzo A. Sagun · Zamboanga del Sur</p>
+    <h1 class="mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">EMERGENCY RESPONSE IN FIRE (GIS)</h1>
+    <p class="mt-4 max-w-2xl text-stone-300">A GIS-based emergency reporting and command system. Residents pin an incident on the map. Command staff verify GPS vs. pin distance (100 m Haversine rule) and drive the response lifecycle.</p>
+    <div class="mt-10 grid gap-4 sm:grid-cols-2">
+      <a href="/resident.html" class="group rounded-2xl border border-rose-500/30 bg-rose-950/40 p-6 transition hover:border-rose-400 hover:bg-rose-900/40">
+        <p class="text-sm font-semibold uppercase tracking-widest text-rose-300">Resident</p>
+        <h2 class="mt-2 text-2xl font-bold">Report a Fire</h2>
+        <p class="mt-2 text-sm text-stone-400">Mobile-first. Auto-captures GPS, lets you adjust the pin, and submits device + pinned coordinates.</p>
+        <span class="mt-6 inline-block text-sm font-semibold text-rose-300 group-hover:underline">Open reporter →</span>
+      </a>
+      <a href="/dashboard.html" class="group rounded-2xl border border-amber-500/30 bg-amber-950/30 p-6 transition hover:border-amber-400 hover:bg-amber-900/20">
+        <p class="text-sm font-semibold uppercase tracking-widest text-amber-300">Fire Personnel</p>
+        <h2 class="mt-2 text-2xl font-bold">Command Dashboard</h2>
+        <p class="mt-2 text-sm text-stone-400">Live alert feed, barangay polygons, station pin, status updates, CSV/PDF export.</p>
+        <span class="mt-6 inline-block text-sm font-semibold text-amber-300 group-hover:underline">Open command center →</span>
+      </a>
+    </div>
+    <p class="mt-10 text-xs text-stone-500">Demo personnel login: <code class="text-stone-300">firestaff</code> / <code class="text-stone-300">vas-bfp-2026</code></p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Report Fire — VAS FireGIS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; }
+    #map { height: 42vh; min-height: 240px; }
+    .leaflet-container { background: #1c1917; }
+  </style>
+</head>
+<body class="bg-stone-950 text-stone-100 pb-8">
+  <header class="sticky top-0 z-20 border-b border-rose-900/60 bg-stone-950/90 backdrop-blur">
+    <div class="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
+      <a href="/" class="text-xs font-semibold uppercase tracking-widest text-rose-400">VAS FireGIS</a>
+      <span class="rounded-full bg-rose-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider">Resident</span>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-lg">
+    <div class="px-4 pt-4">
+      <h1 class="text-2xl font-extrabold">Report a fire emergency</h1>
+      <p class="mt-1 text-sm text-stone-400">Vincenzo A. Sagun, Zamboanga del Sur. Allow location so command can verify your pin.</p>
+    </div>
+
+    <div id="gpsBar" class="mx-4 mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs">
+      <span id="gpsLabel" class="text-amber-300">Requesting device GPS…</span>
+      <div id="coordLine" class="mt-1 font-mono text-[11px] text-stone-400">device: — · pin: —</div>
+    </div>
+
+    <div class="mt-3 overflow-hidden border-y border-stone-800">
+      <div id="map"></div>
+    </div>
+    <p class="px-4 pt-2 text-[11px] text-stone-500">Tap the map or drag the red pin to the exact incident. Device GPS stays locked separately.</p>
+
+    <form id="reportForm" class="space-y-3 px-4 pt-4">
+      <label class="block text-sm font-medium">Barangay <span class="text-rose-400">*</span>
+        <select id="barangay" required class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base">
+          <option value="">Select barangay</option>
+        </select>
+      </label>
+      <label class="block text-sm font-medium">Reporter name <span class="text-rose-400">*</span>
+        <input id="name" required autocomplete="name" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base" placeholder="Full name" />
+      </label>
+      <label class="block text-sm font-medium">Phone number <span class="text-rose-400">*</span>
+        <input id="phone" required type="tel" autocomplete="tel" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base" placeholder="09XX XXX XXXX" />
+      </label>
+      <label class="block text-sm font-medium">Incident notes (optional)
+        <textarea id="notes" rows="3" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base" placeholder="What is burning, people at risk, landmarks…"></textarea>
+      </label>
+      <button id="submitBtn" type="submit" class="w-full rounded-2xl bg-rose-600 py-4 text-lg font-extrabold uppercase tracking-wide shadow-lg shadow-rose-900/40 hover:bg-rose-500 disabled:opacity-50">
+        Send emergency report
+      </button>
+    </form>
+
+    <div id="result" class="mx-4 mt-4 hidden rounded-2xl border p-4 text-sm"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const VAS = [7.5333, 123.1667];
+    let deviceLat = null;
+    let deviceLng = null;
+    let pinLat = VAS[0];
+    let pinLng = VAS[1];
+    let marker;
+
+    const gpsLabel = document.getElementById("gpsLabel");
+    const coordLine = document.getElementById("coordLine");
+    const barangaySel = document.getElementById("barangay");
+    const result = document.getElementById("result");
+
+    function fmt(n) { return Number.isFinite(n) ? Number(n).toFixed(6) : "—"; }
+    function refreshCoords() {
+      coordLine.textContent = `device: ${fmt(deviceLat)}, ${fmt(deviceLng)}  ·  pin: ${fmt(pinLat)}, ${fmt(pinLng)}`;
+    }
+
+    const map = L.map("map", { zoomControl: true }).setView(VAS, 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+
+    marker = L.marker(VAS, { draggable: true }).addTo(map).bindPopup("Incident pin — drag to adjust");
+    marker.on("dragend", () => {
+      const p = marker.getLatLng();
+      pinLat = p.lat;
+      pinLng = p.lng;
+      refreshCoords();
+    });
+    map.on("click", (e) => {
+      pinLat = e.latlng.lat;
+      pinLng = e.latlng.lng;
+      marker.setLatLng(e.latlng);
+      refreshCoords();
+    });
+
+    fetch("/api/barangays")
+      .then((r) => r.json())
+      .then((fc) => {
+        fc.features.forEach((f) => {
+          const o = document.createElement("option");
+          o.value = f.properties.name;
+          o.textContent = f.properties.name + (f.properties.is_poblacion ? " (Poblacion)" : "");
+          barangaySel.appendChild(o);
+        });
+        L.geoJSON(fc, {
+          style: { color: "#fb7185", weight: 1, fillOpacity: 0.06 }
+        }).addTo(map);
+      });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          deviceLat = pos.coords.latitude;
+          deviceLng = pos.coords.longitude;
+          pinLat = deviceLat;
+          pinLng = deviceLng;
+          marker.setLatLng([pinLat, pinLng]);
+          map.setView([pinLat, pinLng], 16);
+          gpsLabel.textContent = "GPS locked from this device (±" + Math.round(pos.coords.accuracy) + " m)";
+          gpsLabel.className = "text-emerald-400";
+          refreshCoords();
+        },
+        (err) => {
+          gpsLabel.textContent = "GPS denied or unavailable. Pin the map manually (report will be Unverified).";
+          gpsLabel.className = "text-amber-300";
+          refreshCoords();
+          console.warn(err);
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    } else {
+      gpsLabel.textContent = "Geolocation not supported. Pin the map manually.";
+      gpsLabel.className = "text-amber-300";
+    }
+    refreshCoords();
+
+    document.getElementById("reportForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      result.classList.add("hidden");
+      try {
+        const payload = {
+          reporter_name: document.getElementById("name").value.trim(),
+          reporter_phone: document.getElementById("phone").value.trim(),
+          barangay_name: barangaySel.value,
+          notes: document.getElementById("notes").value.trim(),
+          device_lat: deviceLat,
+          device_lng: deviceLng,
+          pinned_lat: pinLat,
+          pinned_lng: pinLng
+        };
+        const res = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Submit failed");
+        const inc = data.incident;
+        const ok = inc.spatial_status === "Verified Spatial Alert";
+        result.className = "mx-4 mt-4 rounded-2xl border p-4 text-sm " + (ok
+          ? "border-emerald-600/50 bg-emerald-950/50 text-emerald-100"
+          : "border-amber-600/50 bg-amber-950/40 text-amber-100");
+        result.innerHTML = `
+          <p class="font-bold">${inc.spatial_status}</p>
+          <p class="mt-1 text-xs opacity-90">${inc.spatial_reason}</p>
+          <p class="mt-2 font-mono text-[11px]">Ticket ${inc.id}</p>
+          <p class="mt-1 text-xs">Command staff at VAS Fire Station have the alert. Stay safe and keep this line open if possible.</p>
+        `;
+        result.classList.remove("hidden");
+        document.getElementById("notes").value = "";
+      } catch (err) {
+        result.className = "mx-4 mt-4 rounded-2xl border border-rose-700 bg-rose-950 p-4 text-sm";
+        result.textContent = err.message;
+        result.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
