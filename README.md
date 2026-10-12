@@ -22,6 +22,28 @@ Open [http://localhost:3000](http://localhost:3000)
 | Resident | `/resident.html` | none |
 | Fire Personnel | `/dashboard.html` | `firestaff` / `vas-bfp-2026` |
 
+## Run on shared hosting (PHP — no Node/npm needed)
+
+The repo also ships with a PHP backend (`index.php` + `.htaccess`) so it runs on
+ordinary shared hosting (Hostinger, cPanel, etc.) — **no npm, no build, no CLI**.
+
+### Hostinger / cPanel upload steps
+
+1. Log in to your hosting panel and open **File Manager**.
+2. Navigate to `public_html` (your website root).
+3. Upload **all files** from this project into `public_html`.
+   - Keep the folder structure: `public/`, `data/`, `.htaccess`, `index.php` at the root.
+4. Make sure the `data/` folder is **writable**:
+   - Right-click `data/` → **Permissions** → set to `755` (or `775`).
+   - If `store.json` already exists, set it to `644`.
+5. That's it. Visit your domain — `https://yourdomain.com/`.
+
+The PHP backend serves the same `/api/*` endpoints as the Node version and stores
+incidents in `data/store.json`. The dashboard polls every 8 seconds so live updates
+work even if the SSE stream is limited by your host.
+
+> Requirements: PHP 7.4+ (8.x recommended), Apache with mod_rewrite (default on Hostinger).
+
 ## Spatial verification
 
 Server Haversine (`EARTH_RADIUS_M = 6,371,000`) compares **device GPS** vs **pinned marker**:

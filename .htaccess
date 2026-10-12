@@ -1,0 +1,17 @@
+RewriteEngine On
+
+# Serve the landing page from public/
+RewriteCond %{REQUEST_URI} ^/$
+RewriteRule ^ public/index.html [L]
+
+# Serve static frontend pages from public/
+RewriteCond %{REQUEST_URI} ^/(resident|dashboard|index)\.html$
+RewriteRule ^ public/%{REQUEST_URI} [L]
+
+# If the request matches a real file/directory, serve it as-is
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Everything else (API endpoints, health check) routes through index.php
+RewriteRule ^ index.php [QSA,L]
