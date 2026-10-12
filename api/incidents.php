@@ -1,6 +1,7 @@
 <?php
-// GET   /api/incidents              — list all incidents (newest first)
-// PATCH /api/incidents/{id}/status   — update lifecycle status
+// GET    /api/incidents              — list all incidents (newest first)
+// PATCH  /api/incidents/{id}/status   — update lifecycle status
+// DELETE /api/incidents/{id}           — delete/archive an incident
 require_once __DIR__ . '/../lib.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -48,6 +49,23 @@ if ($method === 'PATCH') {
     save_incidents($incidents);
 
     json_response(['ok' => true, 'incident' => $found]);
+}
+
+// --- DELETE: remove an incident ---
+if ($method === 'DELETE') {
+    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if (!preg_match('#/api/incidents/([^/]+)$#', $path, $m)) {
+        json_response(['error' => 'Not found'], 404);
+    }
+    $id = $m[1];
+    $incidents = load_incidents();
+    $before = count($incidents);
+    $incidents = array_values(array_filter($incidents, fn($i) => ($i['id'] ?? '') !== $id));
+    if (count($incidents) === $before) {
+        json_response(['error' => 'Incident not found.'], 404);
+    }
+    save_incidents($incidents);
+    json_response(['ok' => true, 'deleted' => $id]);
 }
 
 json_response(['error' => 'Method not allowed'], 405);

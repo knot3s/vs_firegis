@@ -63,12 +63,16 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const VAS = [7.5333, 123.1667];
+    // Vincenzo A. Sagun municipality bounds (restrict map to this area)
+    const VAS_CENTER = [7.5164, 123.1697];
+    const VAS_BOUNDS = L.latLngBounds([7.485, 123.135], [7.545, 123.200]);
+
     let deviceLat = null;
     let deviceLng = null;
-    let pinLat = VAS[0];
-    let pinLng = VAS[1];
-    let marker;
+    let pinLat = null;   // pin is NOT set until the user places it
+    let pinLng = null;
+    let marker = null;
+    let deviceMarker = null;
 
     const gpsLabel = document.getElementById("gpsLabel");
     const coordLine = document.getElementById("coordLine");
@@ -80,23 +84,39 @@
       coordLine.textContent = `device: ${fmt(deviceLat)}, ${fmt(deviceLng)}  ·  pin: ${fmt(pinLat)}, ${fmt(pinLng)}`;
     }
 
-    const map = L.map("map", { zoomControl: true }).setView(VAS, 13);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 19,
+    const map = L.map("map", {
+      zoomControl: true,
+      maxBounds: VAS_BOUNDS,
+      maxBoundsViscosity: 1.0,
+      minZoom: 12,
+      maxZoom: 18
+    }).setView(VAS_CENTER, 14);
+
+    // Satellite imagery base (looks better for fire GIS)
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    marker = L.marker(VAS, { draggable: true }).addTo(map).bindPopup("Incident pin — drag to adjust");
-    marker.on("dragend", () => {
-      const p = marker.getLatLng();
-      pinLat = p.lat;
-      pinLng = p.lng;
-      refreshCoords();
-    });
+    // Street labels overlay on top of satellite
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+      pane: "overlayPane"
+    }).addTo(map);
+
+    // Click or tap to place the incident pin
     map.on("click", (e) => {
       pinLat = e.latlng.lat;
       pinLng = e.latlng.lng;
-      marker.setLatLng(e.latlng);
+      if (!marker) {
+        marker = L.marker(e.latlng, { draggable: true }).addTo(map);
+        marker.on("dragend", () => {
+          const p = marker.getLatLng();
+          pinLat = p.lat;
+          pinLng = p.lng;
+          refreshCoords();
+        });
+      } else {
+        marker.setLatLng(e.latlng);
+      }
       refreshCoords();
     });
 
@@ -110,25 +130,40 @@
           barangaySel.appendChild(o);
         });
         L.geoJSON(fc, {
-          style: { color: "#fb7185", weight: 1, fillOpacity: 0.06 }
+          style: (f) => ({
+            color: f.properties.is_poblacion ? "#fbbf24" : "#38bdf8",
+            weight: f.properties.is_poblacion ? 2 : 1,
+            fillColor: f.properties.is_poblacion ? "#fbbf24" : "#0ea5e9",
+            fillOpacity: 0.10,
+            dashArray: f.properties.is_poblacion ? null : "4,4"
+          }),
+          onEachFeature: (f, layer) => {
+            layer.bindTooltip(f.properties.name, { sticky: true, direction: "center" });
+          }
         }).addTo(map);
       });
 
+    // Capture device GPS ONLY for verification — do NOT move the pin
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           deviceLat = pos.coords.latitude;
           deviceLng = pos.coords.longitude;
-          pinLat = deviceLat;
-          pinLng = deviceLng;
-          marker.setLatLng([pinLat, pinLng]);
-          map.setView([pinLat, pinLng], 16);
-          gpsLabel.textContent = "GPS locked from this device (±" + Math.round(pos.coords.accuracy) + " m)";
+          // Show device location as a blue dot (separate from the incident pin)
+          deviceMarker = L.circleMarker([deviceLat, deviceLng], {
+            radius: 8,
+            color: "#3b82f6",
+            weight: 2,
+            fillColor: "#3b82f6",
+            fillOpacity: 0.6
+          }).addTo(map).bindTooltip("Your device location", { permanent: false });
+          map.setView([deviceLat, deviceLng], 15);
+          gpsLabel.textContent = "GPS locked (±" + Math.round(pos.coords.accuracy) + " m). Now tap the map to mark the fire.";
           gpsLabel.className = "text-emerald-400";
           refreshCoords();
         },
         (err) => {
-          gpsLabel.textContent = "GPS denied or unavailable. Pin the map manually (report will be Unverified).";
+          gpsLabel.textContent = "GPS denied/unavailable. Tap the map to mark the fire (report will be Unverified).";
           gpsLabel.className = "text-amber-300";
           refreshCoords();
           console.warn(err);
@@ -136,13 +171,19 @@
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     } else {
-      gpsLabel.textContent = "Geolocation not supported. Pin the map manually.";
+      gpsLabel.textContent = "Geolocation not supported. Tap the map to mark the fire.";
       gpsLabel.className = "text-amber-300";
     }
     refreshCoords();
 
     document.getElementById("reportForm").addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (pinLat === null || pinLng === null) {
+        result.className = "mx-4 mt-4 rounded-2xl border border-rose-700 bg-rose-950 p-4 text-sm";
+        result.textContent = "⚠️  Please tap the map to mark the fire location before submitting.";
+        result.classList.remove("hidden");
+        return;
+      }
       const btn = document.getElementById("submitBtn");
       btn.disabled = true;
       result.classList.add("hidden");
