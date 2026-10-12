@@ -17,7 +17,7 @@
 <body class="bg-stone-950 text-stone-100 pb-8">
   <header class="sticky top-0 z-20 border-b border-rose-900/60 bg-stone-950/90 backdrop-blur">
     <div class="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
-      <a href="/" class="text-xs font-semibold uppercase tracking-widest text-rose-400">VAS FireGIS</a>
+      <a href="index.html" class="text-xs font-semibold uppercase tracking-widest text-rose-400">VAS FireGIS</a>
       <span class="rounded-full bg-rose-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider">Resident</span>
     </div>
   </header>
@@ -101,7 +101,7 @@
       refreshCoords();
     });
 
-    fetch("/api/barangays")
+    fetch("api/barangays")
       .then((r) => r.json())
       .then((fc) => {
         fc.features.forEach((f) => {
@@ -158,7 +158,7 @@
           pinned_lat: pinLat,
           pinned_lng: pinLng
         };
-        const res = await fetch("/api/reports", {
+        const res = await fetch("api/reports", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
