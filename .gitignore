@@ -1,4 +1,13 @@
+# Node (not used, but ignore if present)
 node_modules/
-data/store.json
-.env
+
+# Incident data (auto-created on first run, not committed)
+data/incidents.json
+
+# Logs
 *.log
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db

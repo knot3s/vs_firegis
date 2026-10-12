@@ -1,114 +1,91 @@
-# EMERGENCY RESPONSE IN FIRE (GIS)
+# VAS FireGIS — Emergency Response in Fire (GIS)
 
-GIS-based emergency response prototype for the **Municipality of Vincenzo A. Sagun, Zamboanga del Sur**.
+A GIS-based fire emergency reporting and command system for the Municipality of Vincenzo A. Sagun, Zamboanga del Sur.
 
-Two roles:
+- **Residents** report a fire by pinning it on a map (device GPS is captured automatically).
+- **Fire personnel** verify the report (GPS vs. pin distance, 100 m Haversine rule) and drive the response lifecycle.
 
-- **Resident** — mobile-first report form with HTML5 Geolocation + Leaflet pin
-- **Fire Personnel** — command dashboard, Haversine verification badges, lifecycle, CSV/PDF export
+Pure PHP + HTML/JS. No Node, no npm, no database. Works on any shared hosting (Hostinger, cPanel, XAMPP).
 
-## Run (Node.js)
+## File structure
 
-```bash
-cd C:\xampp\htdocs\vs_firegis
-npm install
-npm start
+```
+vs_firegis/
+├── api/                    # One small file per API endpoint
+│   ├── auth.php            #   POST /api/auth/login
+│   ├── barangays.php       #   GET  /api/barangays
+│   ├── export.php          #   GET  /api/export/csv  |  /pdf
+│   ├── incidents.php       #   GET  /api/incidents  +  PATCH /api/incidents/{id}/status
+│   ├── meta.php            #   GET  /api/meta  +  /health
+│   ├── reports.php         #   POST /api/reports
+│   ├── station.php         #   GET  /api/station
+│   └── stream.php          #   GET  /api/stream (live SSE updates)
+├── data/
+│   └── incidents.json      # Incident records (auto-created; do not commit)
+├── lib.php                 # Config + helpers (barangays, haversine, save/load)
+├── index.html              # Landing page
+├── resident.html           # Resident report form
+├── dashboard.html          # Command dashboard (login required)
+├── .htaccess               # URL routing (Apache)
+└── README.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+### Where things live
 
-| Role | URL | Credentials |
+| What | File |
+| --- | --- |
+| Barangay list, station coords, login, thresholds | [`lib.php`](lib.php) |
+| Submit a fire report | [`api/reports.php`](api/reports.php) |
+| List/update incidents | [`api/incidents.php`](api/incidents.php) |
+| Login | [`api/auth.php`](api/auth.php) |
+| CSV / PDF export | [`api/export.php`](api/export.php) |
+| Live updates | [`api/stream.php`](api/stream.php) |
+
+## How to run
+
+### On shared hosting (Hostinger / cPanel) — no commands needed
+
+1. Log in to your hosting panel → **File Manager** → `public_html`.
+2. Upload all project files (keep the `api/` and `data/` folders).
+3. Right-click the `data/` folder → **Permissions** → `755` (so PHP can write incident records).
+4. Open your domain in a browser. Done.
+
+### Locally (XAMPP)
+
+1. Copy the project into `C:\xampp\htdocs\vs_firegis`.
+2. Make sure Apache is running in the XAMPP control panel.
+3. Visit http://localhost/vs_firegis/
+
+> The PHP built-in server (`php -S`) does **not** read `.htaccess`, so for local testing use XAMPP/Apache.
+
+## Access
+
+| Role | URL | Login |
 | --- | --- | --- |
 | Resident | `/resident.html` | none |
 | Fire Personnel | `/dashboard.html` | `firestaff` / `vas-bfp-2026` |
 
-## Run on shared hosting (PHP — no Node/npm needed)
+## How it works
 
-The repo also ships with a PHP backend (`index.php` + `.htaccess`) so it runs on
-ordinary shared hosting (Hostinger, cPanel, etc.) — **no npm, no build, no CLI**.
+1. A resident opens `/resident.html`, allows GPS, drags the pin to the fire, and submits.
+2. The server computes the distance between the **device GPS** and the **pinned location** using the Haversine formula.
+   - ≤ 100 m → **Verified Spatial Alert**
+   - \> 100 m or no GPS → **Unverified / Spatial Discrepancy**
+3. The incident is saved to `data/incidents.json`.
+4. Fire personnel log in to `/dashboard.html` and see live incidents on the map + feed.
+5. Personnel update the lifecycle: Pending → Dispatched → Under Control → Fire Out (or False Alarm).
+6. Data can be exported as CSV or PDF.
 
-### Hostinger / cPanel upload steps
+## Changing the demo login
 
-1. Log in to your hosting panel and open **File Manager**.
-2. Navigate to `public_html` (your website root).
-3. Upload **all files** from this project into `public_html`.
-   - Keep the folder structure: `public/`, `data/`, `.htaccess`, `index.php` at the root.
-4. Make sure the `data/` folder is **writable**:
-   - Right-click `data/` → **Permissions** → set to `755` (or `775`).
-   - If `store.json` already exists, set it to `644`.
-5. That's it. Visit your domain — `https://yourdomain.com/`.
+Edit these constants at the top of [`lib.php`](lib.php):
 
-The PHP backend serves the same `/api/*` endpoints as the Node version and stores
-incidents in `data/store.json`. The dashboard polls every 8 seconds so live updates
-work even if the SSE stream is limited by your host.
-
-> Requirements: PHP 7.4+ (8.x recommended), Apache with mod_rewrite (default on Hostinger).
-
-## Spatial verification
-
-Server Haversine (`EARTH_RADIUS_M = 6,371,000`) compares **device GPS** vs **pinned marker**:
-
-- `d ≤ 100 m` → **Verified Spatial Alert** (green)
-- `d > 100 m` → **Unverified / Spatial Discrepancy** (yellow)
-
-PostGIS equivalents are documented in `schema.sql` (`ST_Distance` on `geography`).
-
-## Optional PostgreSQL
-
-```bash
-psql -d vas_firegis -f schema.sql
-set DATABASE_URL=postgres://user:pass@localhost:5432/vas_firegis
-npm start
+```php
+const STAFF_USERNAME = 'firestaff';
+const STAFF_PASSWORD = 'vas-bfp-2026';
 ```
 
-Without `DATABASE_URL`, incidents persist in `data/store.json`.
+## Notes
 
-Barangay polygons are **schematic** boxes around Kabatan for the prototype. Replace with PSA/NAMRIA cadastral GeoJSON for operations.
-
-## Lifecycle
-
-`Pending` → `Dispatched` → `Under Control` → `Fire Out` (or `False Alarm`)
-
-## Deploy to the internet
-
-The app is a plain Node.js/Express server — no build step, no native modules.
-`npm install` and `npm start` work on any host that runs Node 18+.
-The server automatically binds to the host-assigned `PORT` and listens on `0.0.0.0`.
-
-### Recommended hosts (Node.js platform)
-
-Pick any of these — they run `npm install` then `npm start` automatically:
-
-| Host | Type | Notes |
-| --- | --- | --- |
-| **Render** (Web Service) | free/paid | Set `Start Command` = `npm start`. Add `DATABASE_URL` for persistence. |
-| **Railway** | paid | Add a Postgres plugin, then set `DATABASE_URL`. |
-| **Fly.io** | paid | `fly launch` — detects Node. |
-| **Heroku** | paid | Auto-detects `start` script. Add Heroku Postgres. |
-| **VPS / cPanel** | any | Run with PM2: `pm2 start server.js --name vs-firegis`. |
-
-For all hosts: set the environment variable `PORT` is automatic; the app reads it.
-
-### ⚠ Persistence on hosting
-
-Most cloud platforms use an **ephemeral filesystem** — `data/store.json` is wiped on every restart or redeploy. To keep incidents permanently, provision a PostgreSQL database and set:
-
-```
-DATABASE_URL=postgres://user:password@host:5432/vas_firegis
-```
-
-Then load the schema once:
-
-```bash
-psql "$DATABASE_URL" -f schema.sql
-```
-
-Without `DATABASE_URL`, the app still runs (JSON mode) but incidents may disappear after a restart. You will see a warning in the logs at startup.
-
-### Vercel / Netlify (serverless) — not recommended
-
-Vercel and Netlify are built for serverless functions, not long-running Express servers. The live alert stream (`/api/stream`, Server-Sent Events) will not work reliably there. Use a Node host from the table above instead.
-
-### Health check
-
-`GET /health` returns `{ ok: true, persistence: "json" | "postgis", uptime }`. Use this as the health-check path on your host.
+- Incident data lives in `data/incidents.json`. The folder must be writable by PHP.
+- This is a prototype. Barangay boundaries are schematic boxes, not official GIS polygons.
