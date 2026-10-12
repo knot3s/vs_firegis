@@ -1,0 +1,14 @@
+{
+  "name": "VAS FireGIS",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm install",
+  "postStartCommand": "nohup npm start > /tmp/server.log 2>&1 & echo $! > /tmp/server.pid",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
