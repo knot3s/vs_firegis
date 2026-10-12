@@ -28,6 +28,17 @@ const VERIFY_THRESHOLD_M = 100; // pin must be within 100m of device GPS
 
 const LIFECYCLE = ['Pending', 'Dispatched', 'Under Control', 'Fire Out', 'False Alarm'];
 
+const EMERGENCY_CATEGORIES = [
+    'Structural Fire',
+    'Grass / Forest Fire',
+    'Vehicular Fire',
+    'Electrical Fire',
+    'LPG / Gas Fire',
+    'Rescue / Medical',
+    'Fire Out / Post-Fire',
+    'Other',
+];
+
 // Demo login for the command dashboard.
 const STAFF_USERNAME = 'firestaff';
 const STAFF_PASSWORD = 'vas-bfp-2026';

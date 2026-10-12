@@ -10,7 +10,7 @@ $stamp = gmdate('Y-m-d');
 
 // --- CSV ---
 if (str_ends_with($path, '/csv')) {
-    $headers = ['id','created_at','barangay_name','reporter_name','reporter_phone','notes',
+    $headers = ['id','created_at','barangay_name','category','reporter_name','reporter_phone','notes',
         'device_lat','device_lng','pinned_lat','pinned_lng','discrepancy_meters','spatial_status','lifecycle_status'];
     $csv = fopen('php://temp', 'r+');
     fputcsv($csv, $headers);
@@ -38,7 +38,7 @@ $lines = [
 ];
 foreach ($incidents as $i => $r) {
     $lines[] = ($i + 1) . ". " . ($r['id'] ?? '') . "  [" . ($r['lifecycle_status'] ?? '') . "]  " . ($r['spatial_status'] ?? '');
-    $lines[] = "   " . ($r['created_at'] ?? '') . "  Brgy. " . ($r['barangay_name'] ?? '');
+    $lines[] = "   " . ($r['created_at'] ?? '') . "  Brgy. " . ($r['barangay_name'] ?? '') . "  Type: " . ($r['category'] ?? 'n/a');
     $lines[] = "   Reporter: " . ($r['reporter_name'] ?? '') . "  " . ($r['reporter_phone'] ?? '');
     $lines[] = "   Device: " . (($r['device_lat'] ?? null) ?? 'n/a') . ", " . (($r['device_lng'] ?? null) ?? 'n/a');
     $lines[] = "   Pinned: " . ($r['pinned_lat'] ?? '') . ", " . ($r['pinned_lng'] ?? '') . "  d=" . (($r['discrepancy_meters'] ?? null) ?? 'n/a') . " m";

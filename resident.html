@@ -44,6 +44,19 @@
           <option value="">Select barangay</option>
         </select>
       </label>
+      <label class="block text-sm font-medium">Emergency type <span class="text-rose-400">*</span>
+        <select id="category" required class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base">
+          <option value="">Select emergency type</option>
+          <option value="Structural Fire">🏠 Structural Fire (house/building)</option>
+          <option value="Grass / Forest Fire">🌿 Grass or Forest Fire</option>
+          <option value="Vehicular Fire">🚗 Vehicular Fire</option>
+          <option value="Electrical Fire">⚡ Electrical Fire</option>
+          <option value="LPG / Gas Fire">🔥 LPG Tank or Gas Leak</option>
+          <option value="Rescue / Medical">🆘 Rescue or Medical Emergency</option>
+          <option value="Fire Out / Post-Fire">✅ Fire Out (post-fire inspection)</option>
+          <option value="Other">❓ Other / Unknown</option>
+        </select>
+      </label>
       <label class="block text-sm font-medium">Reporter name <span class="text-rose-400">*</span>
         <input id="name" required autocomplete="name" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-3 text-base" placeholder="Full name" />
       </label>
@@ -192,6 +205,7 @@
           reporter_name: document.getElementById("name").value.trim(),
           reporter_phone: document.getElementById("phone").value.trim(),
           barangay_name: barangaySel.value,
+          category: document.getElementById("category").value,
           notes: document.getElementById("notes").value.trim(),
           device_lat: deviceLat,
           device_lng: deviceLng,
