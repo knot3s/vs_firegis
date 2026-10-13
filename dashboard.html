@@ -106,7 +106,10 @@
           })
         });
         const text = await res.text();
-        try { data = JSON.parse(text); } catch { data = { error: "Server returned a non-JSON response. Check PHP version (needs 7.4+) and .htaccess." }; }
+        try { data = JSON.parse(text); } catch {
+          const preview = text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
+          data = { error: `Server returned HTML (status ${res.status}): "${preview}" — check PHP version (needs 7.4+) and .htaccess` };
+        }
       } catch (e) {
         err.textContent = "Network error — cannot reach the server. Check your connection and that the site is online.";
         err.classList.remove("hidden");
