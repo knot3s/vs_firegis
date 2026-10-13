@@ -49,8 +49,8 @@
       </div>
       <div class="ml-auto flex flex-wrap items-center gap-2 text-xs">
         <span id="statLine" class="rounded-full bg-stone-800 px-3 py-1 text-stone-300">0 active</span>
-        <a href="api/export/csv" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export CSV</a>
-        <a href="api/export/pdf" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export PDF</a>
+        <a href="api/export.php?format=csv" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export CSV</a>
+        <a href="api/export.php?format=pdf" class="rounded-lg border border-stone-700 px-3 py-1.5 font-semibold hover:bg-stone-800">Export PDF</a>
         <span id="who" class="text-stone-400"></span>
         <button id="logoutBtn" class="rounded-lg border border-rose-700/50 bg-rose-900/40 px-3 py-1.5 font-semibold text-rose-300 hover:bg-rose-800/60">Logout</button>
       </div>
@@ -96,7 +96,7 @@
       err.classList.add("hidden");
       let res, data;
       try {
-        res = await fetch("api/auth/login", {
+        res = await fetch("api/auth.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -173,13 +173,13 @@
         iconSize: [90, 28],
         iconAnchor: [45, 14]
       });
-      fetch("api/station").then((r) => r.json()).then((s) => {
+      fetch("api/station.php").then((r) => r.json()).then((s) => {
         stationMarker = L.marker([s.lat, s.lng], { icon: stationIcon, zIndexOffset: 1000 })
           .addTo(map)
           .bindPopup(`<strong>${s.name}</strong><br>${s.address}`);
       });
 
-      fetch("api/barangays").then((r) => r.json()).then((fc) => {
+      fetch("api/barangays.php").then((r) => r.json()).then((fc) => {
         layerBarangays = L.geoJSON(fc, {
           style: (f) => ({
             color: f.properties.is_poblacion ? "#fbbf24" : "#38bdf8",
@@ -310,12 +310,14 @@
     }
 
     async function updateStatus(id, lifecycle_status) {
-      const res = await fetch(`api/incidents/${encodeURIComponent(id)}/status`, {
-        method: "PATCH",
+      const res = await fetch(`api/incidents.php?id=${encodeURIComponent(id)}&action=status`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lifecycle_status, updated_by: "fire_personnel" })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { return; }
       if (res.ok) {
         const idx = incidents.findIndex((i) => i.id === id);
         if (idx >= 0) incidents[idx] = data.incident;
@@ -327,8 +329,8 @@
 
     async function deleteIncident(id) {
       if (!confirm("Archive / delete this incident? This cannot be undone.")) return;
-      const res = await fetch(`api/incidents/${encodeURIComponent(id)}`, {
-        method: "DELETE"
+      const res = await fetch(`api/incidents.php?id=${encodeURIComponent(id)}&action=delete`, {
+        method: "POST"
       });
       if (res.ok) {
         incidents = incidents.filter((i) => i.id !== id);
@@ -344,7 +346,7 @@
 
     async function loadAll() {
       try {
-        const res = await fetch("api/incidents");
+        const res = await fetch("api/incidents.php");
         const text = await res.text();
         let data;
         try { data = JSON.parse(text); } catch { return; }
@@ -360,7 +362,7 @@
 
     function listenSSE() {
       try {
-        const es = new EventSource("api/stream");
+        const es = new EventSource("api/stream.php");
         es.addEventListener("incident", (ev) => {
           const inc = JSON.parse(ev.data);
           incidents = [inc, ...incidents.filter((i) => i.id !== inc.id)];

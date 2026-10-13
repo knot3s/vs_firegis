@@ -133,7 +133,7 @@
       refreshCoords();
     });
 
-    fetch("api/barangays")
+    fetch("api/barangays.php")
       .then((r) => r.json())
       .then((fc) => {
         fc.features.forEach((f) => {
@@ -212,7 +212,7 @@
           pinned_lat: pinLat,
           pinned_lng: pinLng
         };
-        const res = await fetch("api/reports", {
+        const res = await fetch("api/reports.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)

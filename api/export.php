@@ -1,15 +1,19 @@
 <?php
-// GET /api/export/csv  — download incidents as CSV
-// GET /api/export/pdf  — download incidents as PDF
+// GET /api/export/csv  OR  api/export.php?format=csv  — download incidents as CSV
+// GET /api/export/pdf  OR  api/export.php?format=pdf  — download incidents as PDF
 require_once __DIR__ . '/../lib.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$format = $_GET['format'] ?? '';
+if ($format === '') {
+    $format = str_ends_with($path, '/csv') ? 'csv' : (str_ends_with($path, '/pdf') ? 'pdf' : '');
+}
 $incidents = load_incidents();
 usort($incidents, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
 $stamp = gmdate('Y-m-d');
 
 // --- CSV ---
-if (str_ends_with($path, '/csv')) {
+if ($format === 'csv') {
     $headers = ['id','created_at','barangay_name','category','reporter_name','reporter_phone','notes',
         'device_lat','device_lng','pinned_lat','pinned_lng','discrepancy_meters','spatial_status','lifecycle_status'];
     $csv = fopen('php://temp', 'r+');
@@ -29,6 +33,7 @@ if (str_ends_with($path, '/csv')) {
 }
 
 // --- PDF (simple text log) ---
+if ($format === 'pdf') {
 $lines = [
     "VAS FireGIS Incident Log",
     "Municipality of Vincenzo A. Sagun, Zamboanga del Sur",
@@ -75,3 +80,6 @@ $pdf .= "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxre
 header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="vas-firegis-incidents-' . $stamp . '.pdf"');
 echo $pdf;
+} else {
+    json_response(['error' => 'Unknown format. Use ?format=csv or ?format=pdf.'], 400);
+}
