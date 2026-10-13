@@ -10,6 +10,10 @@
  * Every file in api/ starts with:  require_once __DIR__ . '/../lib.php';
  */
 
+// Suppress PHP warnings/notices so they never corrupt JSON API responses.
+error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
+ini_set('display_errors', '0');
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -86,20 +90,37 @@ function read_body() {
 // Incident storage (data/incidents.json)
 // ---------------------------------------------------------------------------
 
+function ensure_data_dir() {
+    global $dataDir;
+    if (!is_dir($dataDir)) {
+        @mkdir($dataDir, 0755, true);
+    }
+    // Make sure the directory is writable (best-effort on shared hosting).
+    if (is_dir($dataDir) && !is_writable($dataDir)) {
+        @chmod($dataDir, 0755);
+    }
+    return is_dir($dataDir) && is_writable($dataDir);
+}
+
 function load_incidents() {
     global $incidentsFile;
+    ensure_data_dir();
     if (!is_file($incidentsFile)) return [];
     $raw = @file_get_contents($incidentsFile);
-    if ($raw === false) return [];
+    if ($raw === false || $raw === '') return [];
     $data = json_decode($raw, true);
     return is_array($data) ? $data : [];
 }
 
 function save_incidents($incidents) {
-    global $dataDir, $incidentsFile;
-    if (!is_dir($dataDir)) @mkdir($dataDir, 0755, true);
-    $json = json_encode($incidents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    return @file_put_contents($incidentsFile, $json) !== false;
+    global $incidentsFile;
+    if (!ensure_data_dir()) return false;
+    $json = json_encode(array_values($incidents), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $ok = @file_put_contents($incidentsFile, $json) !== false;
+    if ($ok) {
+        @chmod($incidentsFile, 0644);
+    }
+    return $ok;
 }
 
 function new_incident_id() {
